@@ -1,0 +1,31 @@
+# FastAPI and ASGI server
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Database
+sqlalchemy
+alembic
+psycopg2-binary
+
+# Authentication
+python-jose[cryptography]
+passlib[bcrypt]
+python-dotenv
+
+# AWS Services
+boto3
+botocore
+
+# LangChain
+langchain
+langchain-community
+langchain-aws
+
+# Google Gemini SDK
+google-generativeai
+langchain-google-genai
+
+# Utilities
+pydantic>=2.0
+pydantic-settings

@@ -1,0 +1,43 @@
+RAGAppPCOApi/
+├── app/
+│   ├── __init__.py
+│   ├── main.py                     # FastAPI application entry point
+│   ├── config.py                   # Environment configuration
+│   ├── database.py                 # Database connection and session
+│   ├── models.py                   # SQLAlchemy models
+│   │
+│   ├── api/
+│   │   ├── __init__.py
+│   │   └── v1/
+│   │       ├── __init__.py
+│   │       ├── auth.py             # Authentication endpoints
+│   │       ├── notebooks.py        # Notebook CRUD endpoints
+│   │       ├── documents.py        # Document upload/management
+│   │       └── chats.py            # Chat and messages endpoints
+│   │
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   ├── auth.py                 # User and token schemas
+│   │   ├── notebook.py             # Notebook schemas
+│   │   ├── document.py             # Document schemas
+│   │   └── chat.py                 # Chat and message schemas
+│   │
+│   └── services/
+│       ├── __init__.py
+│       ├── auth_service.py         # JWT and password utilities
+│       ├── s3_client.py            # S3 upload/download utilities
+│       ├── bedrock_client.py       # [TODO] Bedrock KB client
+│       ├── ingestion.py            # [TODO] Document ingestion worker
+│       └── rag_service.py          # [TODO] RAG orchestration
+│
+├── alembic/
+│   ├── env.py                      # Alembic environment
+│   ├── script.py.mako              # Migration template
+│   └── versions/                   # Migration files
+│
+├── requirements.txt                # Python dependencies
+├── alembic.ini                    # Alembic configuration
+├── .env.example                   # Environment template
+├── .gitignore
+├── README.md                      # Project documentation
+└── SETUP.md                       # Setup instructions

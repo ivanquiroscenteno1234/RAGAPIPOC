@@ -7,9 +7,9 @@ from botocore.exceptions import ClientError
 
 from langchain_aws import AmazonKnowledgeBasesRetriever
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.prompts import PromptTemplate
-from langchain.schema import Document as LangChainDocument
-from langchain.schema import HumanMessage, AIMessage, SystemMessage
+from langchain_core.prompts import PromptTemplate
+from langchain_core.documents import Document as LangChainDocument
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from app.config import settings
 from app.models import Message, MessageRole

@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     # AWS
     AWS_ACCESS_KEY_ID: Optional[str] = None
     AWS_SECRET_ACCESS_KEY: Optional[str] = None
+    AWS_SESSION_TOKEN: Optional[str] = None
     AWS_REGION: str = "us-east-1"
     S3_BUCKET_NAME: Optional[str] = None
     BEDROCK_KB_ID: Optional[str] = None

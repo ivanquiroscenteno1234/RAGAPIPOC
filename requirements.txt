@@ -19,6 +19,7 @@ botocore
 
 # LangChain
 langchain
+langchain-core
 langchain-community
 langchain-aws
 

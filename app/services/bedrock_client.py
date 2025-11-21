@@ -45,6 +45,7 @@ def start_ingestion_job(
         # Metadata filtering is applied during retrieval, not ingestion
         # The actual ingestion API may vary based on your KB setup
         
+        logger.info(f"Starting ingestion job - KB: {knowledge_base_id}, DS: {data_source_id}, Doc: {document_id}")
         response = bedrock_agent_client.start_ingestion_job(
             knowledgeBaseId=knowledge_base_id,
             dataSourceId=data_source_id,

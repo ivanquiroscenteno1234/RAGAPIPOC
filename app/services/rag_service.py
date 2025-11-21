@@ -23,14 +23,11 @@ SYSTEM_PROMPT = """You are a notebook assistant working exclusively with the doc
 CRITICAL RULES:
 1. Answer ONLY using information from the provided context (document chunks)
 2. If the answer is not in the context, clearly state: "I don't have enough information in these documents to answer that question."
-3. ALWAYS cite your sources by referencing the document name and chunk ID
-4. Never invent or infer information not explicitly stated in the context
-5. Never leak or reference information from other notebooks or users
-6. Provide clear, concise answers with proper citations
-7. If multiple documents support your answer, cite all relevant sources
-
-CITATION FORMAT:
-When making claims, use inline citations like: [Doc: filename, Chunk: chunk_id]
+3. Cite your sources naturally by mentioning the document name when relevant (e.g., "According to the Project Plan...").
+4. Do NOT use bracketed citations like [Doc: filename, Chunk: id].
+5. Never invent or infer information not explicitly stated in the context
+6. Never leak or reference information from other notebooks or users
+7. Provide clear, concise, and natural answers.
 
 Be professional and helpful, but maintain strict adherence to the provided context."""
 
@@ -59,6 +56,15 @@ def build_notebook_retriever(
         document_ids=selected_document_ids
     )
     
+    # Create bedrock-agent-runtime client with explicit credentials
+    client = boto3.client(
+        'bedrock-agent-runtime',
+        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        aws_session_token=settings.AWS_SESSION_TOKEN,
+        region_name=settings.AWS_REGION
+    )
+
     retriever = AmazonKnowledgeBasesRetriever(
         knowledge_base_id=settings.BEDROCK_KB_ID,
         retrieval_config={
@@ -67,7 +73,7 @@ def build_notebook_retriever(
                 "filter": metadata_filter
             }
         },
-        region_name=settings.AWS_REGION
+        client=client
     )
     
     return retriever
@@ -181,17 +187,66 @@ def answer_question(
             logger.info(f"Generated answer in chat-only mode for question: {question[:50]}...")
             return (answer, [])
         
-        # 1. Build retriever
-        retriever = build_notebook_retriever(
+        # 1. Build retriever (REMOVED: Using direct boto3 call instead)
+        # retriever = build_notebook_retriever(...)
+        
+        # 2. Retrieve relevant chunks using direct boto3 call
+        # This bypasses potential issues with AmazonKnowledgeBasesRetriever filter handling
+        
+        # Create metadata filter
+        metadata_filter = create_metadata_filter(
             user_id=user_id,
             notebook_id=notebook_id,
-            selected_document_ids=selected_document_ids,
-            k=6
+            document_ids=selected_document_ids
         )
         
-        # 2. Retrieve relevant chunks
-        # AmazonKnowledgeBasesRetriever.invoke returns List[Document]
-        docs = retriever.invoke(question)
+        # Create client
+        client = boto3.client(
+            'bedrock-agent-runtime',
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            aws_session_token=settings.AWS_SESSION_TOKEN,
+            region_name=settings.AWS_REGION
+        )
+        
+        logger.info(f"Querying Bedrock KB with filter: {metadata_filter}")
+        
+        try:
+            response = client.retrieve(
+                knowledgeBaseId=settings.BEDROCK_KB_ID,
+                retrievalQuery={
+                    'text': question
+                },
+                retrievalConfiguration={
+                    'vectorSearchConfiguration': {
+                        'numberOfResults': 6,
+                        'filter': metadata_filter
+                    }
+                }
+            )
+            
+            retrieval_results = response.get('retrievalResults', [])
+            
+            # Map to LangChain Documents
+            docs = []
+            for result in retrieval_results:
+                content = result.get('content', {}).get('text', '')
+                metadata = result.get('metadata', {})
+                metadata['score'] = result.get('score')
+                metadata['location'] = result.get('location')
+                
+                docs.append(LangChainDocument(
+                    page_content=content,
+                    metadata=metadata
+                ))
+                
+        except Exception as e:
+            logger.error(f"Bedrock retrieval failed: {e}")
+            docs = []
+
+        logger.info(f"Retrieved {len(docs)} documents for question: {question}")
+        for i, doc in enumerate(docs):
+            logger.info(f"Doc {i} content preview: {doc.page_content[:200]}...")
         
         if not docs:
             return (
@@ -215,7 +270,7 @@ def answer_question(
 QUESTION:
 {question}
 
-Please answer the question using only the information from the context above. Include proper citations."""
+Please answer the question using only the information from the context above. Answer naturally and professionally."""
         
         messages = [system_message] + chat_history + [HumanMessage(content=human_message_content)]
         
@@ -228,6 +283,16 @@ Please answer the question using only the information from the context above. In
         
         response = llm.invoke(messages)
         answer = response.content
+        
+        # Handle case where Gemini returns a list of content blocks
+        if isinstance(answer, list):
+            text_parts = []
+            for part in answer:
+                if isinstance(part, dict) and part.get('type') == 'text':
+                    text_parts.append(part.get('text', ''))
+                elif isinstance(part, str):
+                    text_parts.append(part)
+            answer = "".join(text_parts)
         
         logger.info(f"Generated answer for question: {question[:50]}...")
         

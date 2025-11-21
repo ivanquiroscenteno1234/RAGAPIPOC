@@ -164,12 +164,17 @@ def send_message(
             selected_document_ids=message_data.selected_document_ids
         )
         
+        # Ensure answer is a string
+        if isinstance(answer, (list, dict)):
+            import json
+            answer = json.dumps(answer)
+            
         # Create assistant message
         assistant_message = Message(
             chat_id=chat_id,
             user_id=current_user.id,
             role=MessageRole.ASSISTANT,
-            content=answer,
+            content=str(answer),
             metadata_={"model": "gemini", "chunks_retrieved": len(retrieved_chunks)}
         )
         db.add(assistant_message)

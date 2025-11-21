@@ -10,6 +10,8 @@ from app.schemas.document import DocumentResponse
 from app.services.auth_service import get_current_user
 from app.services.s3_client import upload_file_to_s3, delete_file_from_s3
 from app.services.ingestion import trigger_ingestion
+from app.config import settings
+from app.services.bedrock_client import start_ingestion_job
 
 router = APIRouter()
 
@@ -90,6 +92,24 @@ async def upload_document(
     db.commit()
     db.refresh(new_document)
     
+    # Upload metadata file to S3 for Bedrock KB filtering
+    import json
+    metadata = {
+        "metadataAttributes": {
+            "user_id": str(current_user.id),
+            "notebook_id": str(notebook_id),
+            "document_id": str(new_document.id),
+            "filename": file.filename
+        }
+    }
+    
+    metadata_key = f"{s3_key}.metadata.json"
+    upload_file_to_s3(
+        file_content=json.dumps(metadata).encode('utf-8'),
+        s3_key=metadata_key,
+        content_type='application/json'
+    )
+    
     # Trigger ingestion job in background
     import asyncio
     asyncio.create_task(trigger_ingestion(new_document, db))
@@ -138,6 +158,20 @@ def delete_document(
     
     # Delete from S3
     delete_file_from_s3(document.s3_key)
+    delete_file_from_s3(f"{document.s3_key}.metadata.json")
+    
+    # Trigger ingestion job to sync KB (remove deleted document)
+    if settings.BEDROCK_KB_ID and settings.BEDROCK_DATA_SOURCE_ID:
+        
+        s3_uri = f"s3://{settings.S3_BUCKET_NAME}/{document.s3_key}"
+        start_ingestion_job(
+            knowledge_base_id=settings.BEDROCK_KB_ID,
+            data_source_id=settings.BEDROCK_DATA_SOURCE_ID,
+            document_id=document.id,
+            user_id=document.user_id,
+            notebook_id=document.notebook_id,
+            s3_uri=s3_uri
+        )
     
     # Delete from database
     db.delete(document)

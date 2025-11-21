@@ -46,6 +46,7 @@ def upload_file_to_s3(file_content: bytes, s3_key: str, content_type: str = None
         if content_type:
             extra_args['ContentType'] = content_type
         
+        logger.info(f"Uploading file to S3 - Bucket: {settings.S3_BUCKET_NAME}, Key: {s3_key}")
         s3_client.put_object(
             Bucket=settings.S3_BUCKET_NAME,
             Key=s3_key,

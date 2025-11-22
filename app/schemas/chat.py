@@ -39,6 +39,8 @@ class MessageCreate(BaseModel):
     """Schema for creating a message (user question)."""
     content: str
     selected_document_ids: Optional[List[UUID]] = None
+    mode: Optional[str] = "ask"  # "ask" or "plan"
+
 
 
 class MessageResponse(MessageBase):

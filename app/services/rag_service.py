@@ -18,7 +18,7 @@ from app.services.bedrock_client import create_metadata_filter
 logger = logging.getLogger(__name__)
 
 # System prompt for Gemini
-SYSTEM_PROMPT = """You are a notebook assistant working exclusively with the documents provided in this notebook.
+SYSTEM_PROMPT_CONCISE = """You are a notebook assistant working exclusively with the documents provided in this notebook.
 
 CRITICAL RULES:
 1. Answer ONLY using information from the provided context (document chunks)
@@ -30,6 +30,24 @@ CRITICAL RULES:
 7. Provide clear, concise, and natural answers.
 
 Be professional and helpful, but maintain strict adherence to the provided context."""
+
+SYSTEM_PROMPT_DETAILED = """You are an expert Senior Software Architect and Technical Lead.
+Your role is to assist developers by analyzing code documentation and providing high-quality, detailed, and actionable technical responses.
+
+CRITICAL RULES:
+1. **Context-Driven**: Answer ONLY using information from the provided context (document chunks).
+2. **Honesty**: If the answer is not in the context, clearly state: "I don't have enough information in these documents to answer that question."
+3. **Citation**: Cite your sources naturally by mentioning the document name (e.g., "According to the Project Plan...").
+4. **No Hallucination**: Never invent or infer information not explicitly stated in the context.
+5. **Privacy**: Never leak or reference information from other notebooks or users.
+6. **Detail & Structure**: 
+   - Provide comprehensive, detailed answers.
+   - Use markdown headers, bullet points, and code blocks to structure your response.
+   - When asked for a plan, break it down into clear, actionable steps.
+   - Reference specific file names, class names, and method names from the context.
+7. **Tone**: Be professional, technical, and authoritative.
+
+Your goal is to provide the most helpful and complete technical answer possible based on the available data."""
 
 
 def build_notebook_retriever(
@@ -149,7 +167,8 @@ def answer_question(
     notebook_id: UUID,
     question: str,
     history: List[Message],
-    selected_document_ids: Optional[List[UUID]] = None
+    selected_document_ids: Optional[List[UUID]] = None,
+    mode: str = "ask"
 ) -> Tuple[str, List[Dict[str, Any]]]:
     """Answer a question using RAG with LangChain.
     
@@ -159,10 +178,23 @@ def answer_question(
         question: User's question
         history: Chat history
         selected_document_ids: Optional list of document IDs to search
+        mode: "ask" (concise) or "plan" (detailed)
         
     Returns:
         Tuple of (answer, retrieved_chunks)
     """
+    # Configure mode-specific settings
+    if mode == "plan":
+        system_prompt = SYSTEM_PROMPT_DETAILED
+        retrieval_count = 25
+        temperature = 0.3
+        logger.info("Using PLAN mode: Detailed prompt, 25 chunks, temp 0.3")
+    else:
+        system_prompt = SYSTEM_PROMPT_CONCISE
+        retrieval_count = 6
+        temperature = 0.7
+        logger.info("Using ASK mode: Concise prompt, 6 chunks, temp 0.7")
+
     try:
         # Check if AWS credentials are configured for RAG
         if not settings.AWS_ACCESS_KEY_ID or not settings.BEDROCK_KB_ID:
@@ -219,7 +251,7 @@ def answer_question(
                 },
                 retrievalConfiguration={
                     'vectorSearchConfiguration': {
-                        'numberOfResults': 6,
+                        'numberOfResults': retrieval_count,
                         'filter': metadata_filter
                     }
                 }
@@ -262,7 +294,7 @@ def answer_question(
         
         # 5. Build the prompt
         # We construct the messages list manually to have full control
-        system_message = SystemMessage(content=SYSTEM_PROMPT)
+        system_message = SystemMessage(content=system_prompt)
         
         human_message_content = f"""CONTEXT FROM YOUR DOCUMENTS:
 {context}
@@ -278,6 +310,7 @@ Please answer the question using only the information from the context above. An
         llm = ChatGoogleGenerativeAI(
             model=settings.GEMINI_MODEL,
             google_api_key=settings.GEMINI_API_KEY,
+            temperature=temperature,
             convert_system_message_to_human=True
         )
         

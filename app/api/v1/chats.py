@@ -161,7 +161,8 @@ def send_message(
             notebook_id=chat.notebook_id,
             question=message_data.content,
             history=history,
-            selected_document_ids=message_data.selected_document_ids
+            selected_document_ids=message_data.selected_document_ids,
+            mode=message_data.mode
         )
         
         # Ensure answer is a string

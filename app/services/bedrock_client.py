@@ -22,43 +22,50 @@ bedrock_agent_client = boto3.client(
 def start_ingestion_job(
     knowledge_base_id: str,
     data_source_id: str,
-    document_id: UUID,
-    user_id: UUID,
-    notebook_id: UUID,
-    s3_uri: str
+    document_id: Optional[UUID] = None,
+    user_id: Optional[UUID] = None,
+    notebook_id: Optional[UUID] = None,
+    s3_uri: Optional[str] = None
 ) -> Optional[str]:
     """Start a Bedrock Knowledge Base ingestion job.
+    
+    Supports both single-document and batch ingestion modes:
+    - Batch mode: Pass only knowledge_base_id and data_source_id
+    - Single mode: Pass all parameters (legacy, for backwards compatibility)
     
     Args:
         knowledge_base_id: Bedrock Knowledge Base ID
         data_source_id: Data source ID within the KB
-        document_id: Document UUID
-        user_id: User UUID
-        notebook_id: Notebook UUID
-        s3_uri: S3 URI of the document (s3://bucket/key)
+        document_id: (Optional) Document UUID for logging
+        user_id: (Optional) User UUID for logging
+        notebook_id: (Optional) Notebook UUID for logging
+        s3_uri: (Optional) S3 URI of the document
         
     Returns:
         Ingestion job ID if successful, None otherwise
     """
     try:
-        # Note: Bedrock KB ingestion works at the data source level
-        # Metadata filtering is applied during retrieval, not ingestion
-        # The actual ingestion API may vary based on your KB setup
+        # Create description based on mode
+        if document_id:
+            description = f"Ingesting document {document_id}"
+            logger.info(f"Starting single-document ingestion - KB: {knowledge_base_id}, DS: {data_source_id}, Doc: {document_id}")
+        else:
+            description = "Batch document ingestion"
+            logger.info(f"Starting batch ingestion - KB: {knowledge_base_id}, DS: {data_source_id}")
         
-        logger.info(f"Starting ingestion job - KB: {knowledge_base_id}, DS: {data_source_id}, Doc: {document_id}")
         response = bedrock_agent_client.start_ingestion_job(
             knowledgeBaseId=knowledge_base_id,
             dataSourceId=data_source_id,
-            description=f"Ingesting document {document_id}"
+            description=description
         )
         
         ingestion_job_id = response['ingestionJob']['ingestionJobId']
-        logger.info(f"Started ingestion job {ingestion_job_id} for document {document_id}")
+        logger.info(f"Started ingestion job {ingestion_job_id}")
         
         return ingestion_job_id
         
     except ClientError as e:
-        logger.error(f"Error starting ingestion job for document {document_id}: {e}")
+        logger.error(f"Error starting ingestion job: {e}")
         return None
     except Exception as e:
         logger.error(f"Unexpected error starting ingestion job: {e}")

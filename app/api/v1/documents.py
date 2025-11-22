@@ -59,21 +59,84 @@ async def upload_document(
             detail="Notebook not found"
         )
     
-    # Generate unique S3 key
-    file_extension = file.filename.split('.')[-1] if '.' in file.filename else ''
-    s3_key = f"users/{current_user.id}/notebooks/{notebook_id}/{uuid4()}.{file_extension}"
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Generate unique document ID first
+    document_id = uuid4()
+    
+    # Generate S3 key using document ID and original filename
+    import os
+    safe_filename = os.path.basename(file.filename)
+    # Prefix filename with document_id to ensure uniqueness (flattened structure)
+    unique_filename = f"{document_id}_{safe_filename}"
+    s3_key = f"users/{current_user.id}/notebooks/{notebook_id}/{unique_filename}"
+    
+    logger.info(f"Processing upload for file: {safe_filename}")
+    logger.info(f"Generated S3 key: {s3_key}")
+    
+    # Determine correct Content-Type for Bedrock
+    MIME_TYPES = {
+        '.pdf': 'application/pdf',
+        '.txt': 'text/plain',
+        '.md': 'text/markdown',
+        '.html': 'text/html',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.csv': 'text/csv',
+        '.xls': 'application/vnd.ms-excel',
+        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        '.ppt': 'application/vnd.ms-powerpoint',
+        '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    }
+    
+    file_ext = os.path.splitext(safe_filename)[1].lower()
+    content_type = MIME_TYPES.get(file_ext, file.content_type)
+    
+    logger.info(f"Detected extension: {file_ext}")
+    logger.info(f"Resolved Content-Type: {content_type}")
     
     # Read file content
     file_content = await file.read()
+    logger.info(f"File size: {len(file_content)} bytes")
+    
+    # Convert PPTX to PDF if needed (Bedrock doesn't support PPTX)
+    if file_ext == '.pptx':
+        logger.info("PPTX file detected, converting to PDF...")
+        try:
+            from app.services.pptx_converter import convert_pptx_to_pdf
+            pdf_content, pdf_filename = convert_pptx_to_pdf(file_content, safe_filename)
+            
+            # Update variables for PDF
+            file_content = pdf_content
+            safe_filename = pdf_filename
+            file_ext = '.pdf'
+            content_type = 'application/pdf'
+            
+            # Update S3 key to use PDF extension (flattened structure)
+            unique_filename = f"{document_id}_{pdf_filename}"
+            s3_key = f"users/{current_user.id}/notebooks/{notebook_id}/{unique_filename}"
+            
+            logger.info(f"Converted to PDF: {safe_filename} ({len(file_content)} bytes)")
+        except Exception as e:
+            logger.error(f"Failed to convert PPTX to PDF: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to convert PPTX to PDF: {str(e)}"
+            )
+    
     
     # Upload to S3
     upload_success = upload_file_to_s3(
         file_content=file_content,
         s3_key=s3_key,
-        content_type=file.content_type
+        content_type=content_type
     )
     
+    logger.info(f"S3 Upload Success: {upload_success}")
+    
     if not upload_success:
+        logger.error("Upload failed.")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to upload file to S3"
@@ -81,6 +144,7 @@ async def upload_document(
     
     # Create document record
     new_document = Document(
+        id=document_id, # Use the pre-generated ID
         notebook_id=notebook_id,
         user_id=current_user.id,
         title=file.filename,

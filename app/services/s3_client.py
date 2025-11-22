@@ -56,6 +56,8 @@ def upload_file_to_s3(file_content: bytes, s3_key: str, content_type: str = None
         logger.info(f"Successfully uploaded file to S3: {s3_key}")
         return True
     except ClientError as e:
+        import sys
+        print(f"CRITICAL S3 UPLOAD ERROR: {e}", file=sys.stderr)
         logger.error(f"Error uploading file to S3: {e}")
         return False
 

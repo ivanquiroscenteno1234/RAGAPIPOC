@@ -280,6 +280,60 @@ def answer_question(
         for i, doc in enumerate(docs):
             logger.info(f"Doc {i} content preview: {doc.page_content[:200]}...")
         
+        if not docs and selected_document_ids:
+            logger.warning("Strict filter returned 0 results. Attempting fallback with notebook-only filter.")
+            
+            # Fallback: Try retrieving from the notebook without document_id filter
+            # This helps if the document_id metadata is missing or not indexed yet
+            fallback_filter = create_metadata_filter(
+                user_id=user_id,
+                notebook_id=notebook_id,
+                document_ids=None # Remove document constraint
+            )
+            
+            try:
+                response = client.retrieve(
+                    knowledgeBaseId=settings.BEDROCK_KB_ID,
+                    retrievalQuery={
+                        'text': question
+                    },
+                    retrievalConfiguration={
+                        'vectorSearchConfiguration': {
+                            'numberOfResults': retrieval_count * 2, # Fetch more to increase chance of finding relevant docs
+                            'filter': fallback_filter
+                        }
+                    }
+                )
+                
+                retrieval_results = response.get('retrievalResults', [])
+                
+                # Client-side filtering
+                fallback_docs = []
+                target_doc_ids = [str(uid) for uid in selected_document_ids]
+                
+                for result in retrieval_results:
+                    metadata = result.get('metadata', {})
+                    doc_id = metadata.get('document_id')
+                    
+                    # If document_id matches, or if it's missing (we can't be sure, but we'll include it if it looks relevant)
+                    # Actually, if document_id is missing, we should probably check filename or source URI
+                    # For now, we only include if we can verify it matches OR if we are desperate
+                    
+                    if doc_id and str(doc_id) in target_doc_ids:
+                        content = result.get('content', {}).get('text', '')
+                        metadata['score'] = result.get('score')
+                        metadata['location'] = result.get('location')
+                        fallback_docs.append(LangChainDocument(page_content=content, metadata=metadata))
+                
+                if fallback_docs:
+                    logger.info(f"Fallback retrieval found {len(fallback_docs)} relevant documents.")
+                    docs = fallback_docs
+                else:
+                    logger.warning("Fallback retrieval also failed to find matching documents.")
+                    
+            except Exception as e:
+                logger.error(f"Fallback retrieval failed: {e}")
+
         if not docs:
             return (
                 "I couldn't find any relevant information in your documents to answer this question.",
@@ -326,6 +380,9 @@ Please answer the question using only the information from the context above. An
                 elif isinstance(part, str):
                     text_parts.append(part)
             answer = "".join(text_parts)
+        # Handle case where Gemini returns a single content block dict
+        elif isinstance(answer, dict) and answer.get('type') == 'text':
+            answer = answer.get('text', '')
         
         logger.info(f"Generated answer for question: {question[:50]}...")
         

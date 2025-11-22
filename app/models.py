@@ -24,6 +24,20 @@ class MessageRole(str, enum.Enum):
     SYSTEM = "system"
 
 
+class SummaryPackStatus(str, enum.Enum):
+    """Status of a summary pack generation."""
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class SummaryPackScope(str, enum.Enum):
+    """Scope of the summary pack."""
+    NOTEBOOK = "notebook"
+    DOCUMENT_LIST = "document_list"
+
+
 class User(Base):
     """User model."""
     __tablename__ = "users"
@@ -39,6 +53,7 @@ class User(Base):
     documents = relationship("Document", back_populates="user", cascade="all, delete-orphan")
     chats = relationship("Chat", back_populates="user", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="user", cascade="all, delete-orphan")
+    summary_packs = relationship("SummaryPack", back_populates="user", cascade="all, delete-orphan")
 
 
 class Notebook(Base):
@@ -56,6 +71,7 @@ class Notebook(Base):
     user = relationship("User", back_populates="notebooks")
     documents = relationship("Document", back_populates="notebook", cascade="all, delete-orphan")
     chats = relationship("Chat", back_populates="notebook", cascade="all, delete-orphan")
+    summary_packs = relationship("SummaryPack", back_populates="notebook", cascade="all, delete-orphan")
 
 
 class Document(Base):
@@ -130,3 +146,24 @@ class Citation(Base):
     # Relationships
     message = relationship("Message", back_populates="citations")
     document = relationship("Document", back_populates="citations")
+
+
+class SummaryPack(Base):
+    """Summary Pack model."""
+    __tablename__ = "summary_packs"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    notebook_id = Column(UUID(as_uuid=True), ForeignKey("notebooks.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    scope_type = Column(Enum(SummaryPackScope), nullable=False)
+    scope_document_ids = Column(JSON, nullable=True)
+    status = Column(Enum(SummaryPackStatus), default=SummaryPackStatus.PENDING, nullable=False)
+    sections = Column(JSON, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    notebook = relationship("Notebook", back_populates="summary_packs")
+    user = relationship("User", back_populates="summary_packs")

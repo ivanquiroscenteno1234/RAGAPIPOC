@@ -42,7 +42,7 @@ async def root():
 
 
 # Import routers
-from app.api.v1 import auth, notebooks, documents, chats, summary_packs
+from app.api.v1 import auth, notebooks, documents, chats, summary_packs, discovery
 from app.api import compatibility
 
 # Include routers
@@ -51,6 +51,7 @@ app.include_router(notebooks.router, prefix="/api/v1", tags=["notebooks"])
 app.include_router(documents.router, prefix="/api/v1", tags=["documents"])
 app.include_router(chats.router, prefix="/api/v1", tags=["chats"])
 app.include_router(summary_packs.router, prefix="/api/v1", tags=["summary_packs"])
+app.include_router(discovery.router, prefix="/api/v1", tags=["discovery"])
 
 # Include compatibility endpoints (no prefix for legacy paths)
 app.include_router(compatibility.router, tags=["compatibility"])

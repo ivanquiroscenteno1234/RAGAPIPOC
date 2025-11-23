@@ -54,6 +54,7 @@ class User(Base):
     chats = relationship("Chat", back_populates="user", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="user", cascade="all, delete-orphan")
     summary_packs = relationship("SummaryPack", back_populates="user", cascade="all, delete-orphan")
+    discovery_question_sets = relationship("DiscoveryQuestionSet", back_populates="user", cascade="all, delete-orphan")
 
 
 class Notebook(Base):
@@ -72,6 +73,7 @@ class Notebook(Base):
     documents = relationship("Document", back_populates="notebook", cascade="all, delete-orphan")
     chats = relationship("Chat", back_populates="notebook", cascade="all, delete-orphan")
     summary_packs = relationship("SummaryPack", back_populates="notebook", cascade="all, delete-orphan")
+    discovery_question_sets = relationship("DiscoveryQuestionSet", back_populates="notebook", cascade="all, delete-orphan")
 
 
 class Document(Base):
@@ -167,3 +169,90 @@ class SummaryPack(Base):
     # Relationships
     notebook = relationship("Notebook", back_populates="summary_packs")
     user = relationship("User", back_populates="summary_packs")
+
+
+class DiscoveryQuestionSetStatus(str, enum.Enum):
+    """Status of a discovery question set generation."""
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class DiscoveryQuestionTargetAudience(str, enum.Enum):
+    """Target audience for discovery questions."""
+    BUSINESS = "business"
+    TECHNICAL = "technical"
+    VENDOR = "vendor"
+    MIXED = "mixed"
+
+
+class DiscoveryQuestionScope(str, enum.Enum):
+    """Scope of the discovery question set."""
+    NOTEBOOK = "notebook"
+    DOCUMENT_LIST = "document_list"
+
+
+class DiscoveryQuestionCategory(str, enum.Enum):
+    """Category of a discovery question."""
+    REQUIREMENTS = "requirements"
+    DATA = "data"
+    ARCHITECTURE = "architecture"
+    RISKS = "risks"
+    OPERATIONS = "operations"
+    OTHER = "other"
+
+
+class DiscoveryQuestionPriority(str, enum.Enum):
+    """Priority of a discovery question."""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class DiscoveryQuestionStatus(str, enum.Enum):
+    """Status of a discovery question."""
+    OPEN = "open"
+    ANSWERED = "answered"
+    NOT_RELEVANT = "not_relevant"
+
+
+class DiscoveryQuestionSet(Base):
+    """Discovery Question Set model."""
+    __tablename__ = "discovery_question_sets"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    notebook_id = Column(UUID(as_uuid=True), ForeignKey("notebooks.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    target_audience = Column(Enum(DiscoveryQuestionTargetAudience), nullable=False)
+    scope_type = Column(Enum(DiscoveryQuestionScope), nullable=False)
+    scope_document_ids = Column(JSON, nullable=True)
+    status = Column(Enum(DiscoveryQuestionSetStatus), default=DiscoveryQuestionSetStatus.PENDING, nullable=False)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    notebook = relationship("Notebook", back_populates="discovery_question_sets")
+    user = relationship("User", back_populates="discovery_question_sets")
+    questions = relationship("DiscoveryQuestion", back_populates="question_set", cascade="all, delete-orphan")
+
+
+class DiscoveryQuestion(Base):
+    """Discovery Question model."""
+    __tablename__ = "discovery_questions"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    question_set_id = Column(UUID(as_uuid=True), ForeignKey("discovery_question_sets.id", ondelete="CASCADE"), nullable=False, index=True)
+    text = Column(Text, nullable=False)
+    category = Column(Enum(DiscoveryQuestionCategory), nullable=False)
+    priority = Column(Enum(DiscoveryQuestionPriority), nullable=False)
+    status = Column(Enum(DiscoveryQuestionStatus), default=DiscoveryQuestionStatus.OPEN, nullable=False)
+    related_document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    question_set = relationship("DiscoveryQuestionSet", back_populates="questions")
+    related_document = relationship("Document")
